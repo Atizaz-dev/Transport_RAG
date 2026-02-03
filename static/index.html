@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TMS Demo — Ask Shipment Data</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --surface: #1a2332;
+      --border: #2d3a4d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --accent-dim: #388bfd66;
+      --success: #3fb950;
+      --error: #f85149;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      min-height: 100vh;
+      padding: 2rem;
+      line-height: 1.5;
+    }
+    .container { max-width: 640px; margin: 0 auto; }
+    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .subtitle { color: var(--muted); font-size: 0.95rem; margin-bottom: 2rem; }
+    label { display: block; font-size: 0.9rem; margin-bottom: 0.5rem; color: var(--muted); }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: 1rem;
+    }
+    input[type="text"]:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    button {
+      margin-top: 1rem;
+      padding: 0.75rem 1.25rem;
+      background: var(--accent);
+      color: var(--bg);
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button:hover { opacity: 0.9; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .answer {
+      margin-top: 2rem;
+      padding: 1.25rem;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      white-space: pre-wrap;
+    }
+    .answer.empty { display: none; }
+    .sources {
+      margin-top: 1rem;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .sources summary { cursor: pointer; }
+    .sources ul { margin: 0.5rem 0 0 1.25rem; padding: 0; }
+    .error { color: var(--error); margin-top: 1rem; }
+    .loading { color: var(--muted); margin-top: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Ask your shipment data</h1>
+    <p class="subtitle">TMS improvement demo — natural language questions over your shipment dataset.</p>
+    <p class="subtitle" style="margin-top: -1rem; font-size: 0.85rem;">Ask about: delivery status (delayed/on time), region, product category, shipping mode, cost, delivery days.</p>
+    <form id="form">
+      <label for="question">Question</label>
+      <input type="text" id="question" name="question" placeholder="e.g. Which shipments might be late?" autocomplete="off" />
+      <button type="submit" id="submit">Ask</button>
+    </form>
+    <div id="loading" class="loading" style="display: none;">Asking…</div>
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="answer" class="answer empty"></div>
+    <details id="sources" class="sources" style="display: none;">
+      <summary>Source rows</summary>
+      <ul id="sources-list"></ul>
+    </details>
+  </div>
+  <script>
+    const form = document.getElementById("form");
+    const question = document.getElementById("question");
+    const submit = document.getElementById("submit");
+    const loading = document.getElementById("loading");
+    const errorEl = document.getElementById("error");
+    const answerEl = document.getElementById("answer");
+    const sourcesEl = document.getElementById("sources");
+    const sourcesList = document.getElementById("sources-list");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const q = question.value.trim();
+      if (!q) return;
+      submit.disabled = true;
+      loading.style.display = "block";
+      errorEl.style.display = "none";
+      errorEl.textContent = "";
+      answerEl.classList.add("empty");
+      answerEl.textContent = "";
+      sourcesEl.style.display = "none";
+      sourcesList.innerHTML = "";
+
+      try {
+        const res = await fetch("/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question: q }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || res.statusText);
+        answerEl.textContent = data.answer;
+        answerEl.classList.remove("empty");
+        if (data.sources && data.sources.length) {
+          sourcesEl.style.display = "block";
+          data.sources.forEach((s) => {
+            const li = document.createElement("li");
+            li.textContent = s.id + (s.score != null ? " (score: " + s.score.toFixed(3) + ")" : "") + " — " + JSON.stringify(s.metadata || {});
+            sourcesList.appendChild(li);
+          });
+        }
+      } catch (err) {
+        errorEl.textContent = err.message || "Request failed.";
+        errorEl.style.display = "block";
+      } finally {
+        loading.style.display = "none";
+        submit.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
